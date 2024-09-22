@@ -1,5 +1,5 @@
-﻿#Requires -Version 7
-Set-StrictMode -Version 7
+﻿#Requires -Version 5
+Set-StrictMode -Version 5
 
 <#
 .SYNOPSIS
@@ -39,7 +39,7 @@ https://github.com/michalzobec/
 
 ######
 $ScriptName = "Microsoft Exchange Online Distribution Group Members Update"
-$ScriptVersion = "24.09.22.073059"
+$ScriptVersion = "24.09.22.085359"
 ######
 
 
@@ -121,24 +121,24 @@ $LogFile = $LogFileDir + "\$LogFileName-$LogDate.txt"
 # . $CfgFilePath
 
 # Custom Variables
-$excelPath = $ScriptDir + "Allowed-Senders-List\services-international.xlsx" # Cesta k Excel sešitu
+$excelPath = $ScriptDir + "\Allowed-Senders-List\services-international.xlsx" # Cesta k Excel sešitu
 $distributionGroup = "exchange-senders-infrastructure-test@zobecint.cz" # Email distribučního seznamu
 $UserPrincipalName = "u7256yr@zobeccid.cz" # Tvé emailové uživatelské jméno pro přihlášení
 
 # Check if the required modules are installed
 if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
-    Write-Host "Chyba: Modul 'ExchangeOnlineManagement' není nainstalován. Nainstalujte modul a zkuste to znovu." -ForegroundColor Red
+    Write-Host "Error: Module 'ExchangeOnlineManagement' is not installed. Please install the module and try again." -ForegroundColor Red
     exit
 }
 
 if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
-    Write-Host "Chyba: Modul 'ImportExcel' není nainstalován. Nainstalujte modul a zkuste to znovu." -ForegroundColor Red
+    Write-Host "Error: Module 'ImportExcel' is not installed. Please install the module and try again." -ForegroundColor Red
     exit
 }
 
 # Check if the Excel file exists
 if (-not (Test-Path $excelPath)) {
-    Write-Host "Chyba: Soubor '$excelPath' neexistuje. Zkontrolujte cestu a zkuste to znovu." -ForegroundColor Red
+    Write-Host "Error: File '$excelPath' does not exist. Please check the path and try again." -ForegroundColor Red
     exit
 }
 
@@ -150,7 +150,7 @@ Connect-ExchangeOnline -UserPrincipalName $UserPrincipalName
 
 # Check if the distribution group exists
 if (-not (Get-DistributionGroup -Identity $distributionGroup -ErrorAction SilentlyContinue)) {
-    Write-Host "Chyba: Distribuční seznam '$distributionGroup' neexistuje. Zkontrolujte název a zkuste to znovu." -ForegroundColor Red
+    Write-Host "Error: Distribution group '$distributionGroup' does not exist. Please check the name and try again." -ForegroundColor Red
     Disconnect-ExchangeOnline -Confirm:$false
     exit
 }
@@ -165,15 +165,28 @@ foreach ($entry in $emailList) {
     
     # Check if the external contact exists
     $externalContact = Get-MailContact -Identity $email -ErrorAction SilentlyContinue
-    
+
     if (-not $externalContact) {
         try {
             # Create external contact if it doesn't exist
             New-MailContact -Name $displayName -ExternalEmailAddress $email
             Write-Host "Created external contact for $($displayName) with email $($email)"
         } catch {
-            Write-Host "Chyba při vytváření kontaktu pro '$($displayName)': $_" -ForegroundColor Red
+            Write-Host "Error creating contact for '$($displayName)': $_" -ForegroundColor Red
             continue
+        }
+    } else {
+        # Check if the Display Name matches, ignoring case and leading/trailing spaces
+        if ($externalContact.DisplayName.Trim().ToLower() -ne $displayName.Trim().ToLower()) {
+            try {
+                # Update the Display Name to match the Excel value
+                Set-MailContact -Identity $email -Name $displayName
+                Write-Host "Updated Display Name for contact '$($email)' to '$($displayName)'"
+            } catch {
+                Write-Host "Error updating contact name for '$($email)': $_" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "Display Name for contact '$($email)' is already correct."
         }
     }
 

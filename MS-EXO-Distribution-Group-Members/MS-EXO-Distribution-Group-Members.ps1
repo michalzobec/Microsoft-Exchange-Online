@@ -39,7 +39,7 @@ https://github.com/michalzobec/
 
 ######
 $ScriptName = "Microsoft Exchange Online Distribution Group Members Update"
-$ScriptVersion = "24.09.22.093359"
+$ScriptVersion = "24.09.22.094559"
 ######
 
 
@@ -86,8 +86,8 @@ Function Write-Log {
 $LogDate = Get-Date -Format "yyyyMMdd"
 $LogFileName = "Get-SystemReport-log"
 $LogFile = $ScriptDir + "\$LogFileName-$LogDate.txt"
-$CopyRightYearFrom = "2016"
-$CopyRightYearTo = "2019"
+$CopyRightYearFrom = "2020"
+$CopyRightYearTo = "2024"
 
 # Header
 Write-Host ""
@@ -158,8 +158,28 @@ if (-not (Get-DistributionGroup -Identity $distributionGroup -ErrorAction Silent
 # Import the email addresses and display names from the Excel file
 $emailList = Import-Excel -Path $excelPath
 
+# Check for duplicate email addresses
+$duplicateEmails = $emailList | Group-Object Email | Where-Object { $_.Count -gt 1 }
+if ($duplicateEmails) {
+    Write-Host "Warning: Duplicate email addresses found in the Excel file:"
+    $duplicateEmails | ForEach-Object { Write-Host " - $($_.Name)" }
+}
+
+# Initialize counters for tracking progress
+$contactsCreated = 0
+$contactsUpdated = 0
+$contactsRemoved = 0
+
+# Total number of entries
+$totalEntries = $emailList.Count
+$currentEntry = 0
+
 # Loop through each entry in the Excel and add missing ones to the distribution group
 foreach ($entry in $emailList) {
+    $currentEntry++
+    # Show progress
+    Write-Progress -Activity "Processing contacts" -Status "Processing $($entry.Email)" -PercentComplete (($currentEntry / $totalEntries) * 100)
+
     $email = $entry.Email
     $displayName = $entry.'Display Name'
     
@@ -171,6 +191,7 @@ foreach ($entry in $emailList) {
             # Create external contact if it doesn't exist
             New-MailContact -Name $displayName -ExternalEmailAddress $email
             Write-Host "Created external contact for $($displayName) with email $($email)"
+            $contactsCreated++
         } catch {
             Write-Host "Error creating contact for '$($displayName)': $_" -ForegroundColor Red
             continue
@@ -182,10 +203,12 @@ foreach ($entry in $emailList) {
                 # Remove the existing contact before creating a new one
                 Remove-MailContact -Identity $email -Confirm:$false
                 Write-Host "Removed existing contact '$($email)' due to name mismatch."
-                
+                $contactsRemoved++
+
                 # Create new contact with the correct Display Name
                 New-MailContact -Name $displayName -ExternalEmailAddress $email
                 Write-Host "Created new contact for $($displayName) with email $($email)"
+                $contactsCreated++
             } catch {
                 Write-Host "Error removing or creating contact for '$($email)': $_" -ForegroundColor Red
             }
@@ -209,3 +232,9 @@ foreach ($entry in $emailList) {
 
 # Disconnect from Exchange Online
 Disconnect-ExchangeOnline -Confirm:$false
+
+# Summary report
+Write-Host "`nSummary:"
+Write-Host "Contacts Created: $contactsCreated"
+Write-Host "Contacts Updated: $contactsUpdated"
+Write-Host "Contacts Removed: $contactsRemoved"

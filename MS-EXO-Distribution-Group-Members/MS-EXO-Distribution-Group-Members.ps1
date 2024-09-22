@@ -39,7 +39,7 @@ https://github.com/michalzobec/
 
 ######
 $ScriptName = "Microsoft Exchange Online Distribution Group Members Update"
-$ScriptVersion = "24.09.22.085359"
+$ScriptVersion = "24.09.22.093359"
 ######
 
 
@@ -179,11 +179,15 @@ foreach ($entry in $emailList) {
         # Check if the Display Name matches, ignoring case and leading/trailing spaces
         if ($externalContact.DisplayName.Trim().ToLower() -ne $displayName.Trim().ToLower()) {
             try {
-                # Update the Display Name to match the Excel value
-                Set-MailContact -Identity $email -Name $displayName
-                Write-Host "Updated Display Name for contact '$($email)' to '$($displayName)'"
+                # Remove the existing contact before creating a new one
+                Remove-MailContact -Identity $email -Confirm:$false
+                Write-Host "Removed existing contact '$($email)' due to name mismatch."
+                
+                # Create new contact with the correct Display Name
+                New-MailContact -Name $displayName -ExternalEmailAddress $email
+                Write-Host "Created new contact for $($displayName) with email $($email)"
             } catch {
-                Write-Host "Error updating contact name for '$($email)': $_" -ForegroundColor Red
+                Write-Host "Error removing or creating contact for '$($email)': $_" -ForegroundColor Red
             }
         } else {
             Write-Host "Display Name for contact '$($email)' is already correct."
